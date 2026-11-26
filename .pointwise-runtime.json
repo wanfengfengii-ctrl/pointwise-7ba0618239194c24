@@ -4,6 +4,6 @@
   "setup": [],
   "start": ["python3", "-B", "-m", "score.web.app", "--db", "rehearsal.sqlite3", "serve", "--host", "${POINTWISE_HOST}", "--port", "${POINTWISE_PORT}"],
   "readiness_path": "/",
-  "verify": ["python3", "-B", "check_project.py"],
-  "demo": ["python3", "-B", "-m", "tests.support"]
+  "verify": ["python3", "-B", "check_all.py"],
+  "demo": ["python3", "-B", "-m", "tests.liandu_demo"]
 }

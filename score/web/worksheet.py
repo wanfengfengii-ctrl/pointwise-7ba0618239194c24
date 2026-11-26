@@ -2,6 +2,8 @@ import sqlite3
 from html import escape
 
 from score.edit.revisions import read_current_revision, read_revision
+from score.liandu.state import VISIBLE, evaluate_line
+from score.liandu.store import read_liaisons
 from score.source.bars import read_bars
 from score.source.import_score import read_source_title
 from score.source.voices import read_voices
@@ -19,6 +21,16 @@ def _chooser(label: str, name: str, choices, selected: str) -> str:
         active = ' selected' if key == selected else ''
         options.append(f'<option value="{escape(key)}"{active}>{escape(caption)}</option>')
     return f'<label>{label}<select name="{name}">{"".join(options)}</select></label>'
+
+
+def visible_seams(db: sqlite3.Connection, working, voice: str, bar: str) -> set[tuple[str, str]]:
+    """Word-key seams (left key, right key) that carry a visible liaison right now."""
+    marks = read_liaisons(db, working.score, voice, bar)
+    seams = set()
+    for item in evaluate_line(marks, working.line(voice, bar)):
+        if item.state == VISIBLE:
+            seams.add((item.mark.left, item.mark.right))
+    return seams
 
 
 def render_worksheet(
@@ -40,10 +52,19 @@ def render_worksheet(
     bars = read_bars(db, working.score)
     voice_name = next(item.name for item in voices if item.id == voice)
     words = working.line(voice, bar)
+    seams = visible_seams(db, working, voice, bar)
     items = []
     for index, word in enumerate(words):
         marked = ' class="conflicting-word"' if conflict and conflict[0] <= index < conflict[1] else ''
         items.append(f'<li data-beat="{word.beat}"{marked}>{escape(word.text)}</li>')
+        if index + 1 < len(words):
+            left_char = word.chars[-1]
+            right_char = words[index + 1].chars[0]
+            if (left_char, right_char) in seams:
+                items.append(
+                    '<li class="liaison-seam" data-liaison="visible" aria-label="连读">'
+                    '<span class="liaison-mark" data-liaison="visible"></span></li>'
+                )
     empty = '<p>本小节没有歌词。</p>' if not words else ''
     form = render_edit_form(working.number, voice, bar, words, draft=draft)
     switch_voice = _chooser('声部', 'voice', ((item.id, item.name) for item in voices), voice)

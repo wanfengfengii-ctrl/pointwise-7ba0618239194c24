@@ -49,6 +49,8 @@ class Page(HTMLParser):
         self.voice = None
         self.cell = None
         self.in_tokens = False
+        self.liaisons = []
+        self.mark_states = []
         self.feed(body)
         self.close()
 
@@ -71,9 +73,12 @@ class Page(HTMLParser):
         if tag == 'ol' and attrs.get('id') == 'measure-words':
             self.in_measure = True
         elif tag == 'li' and self.in_measure:
-            self.word = True
-            self.words.append('')
-            self.word_beats.append(int(attrs['data-beat']))
+            if attrs.get('data-liaison') == 'visible':
+                self.liaisons.append(('measure', len(self.words)))
+            else:
+                self.word = True
+                self.words.append('')
+                self.word_beats.append(int(attrs['data-beat']))
         elif tag == 'th' and 'data-bar' in attrs:
             self.columns.append((attrs['data-bar'], int(attrs['data-beat'])))
         elif tag == 'tr' and 'data-voice' in attrs:
@@ -84,6 +89,13 @@ class Page(HTMLParser):
             self.cells[self.cell] = ('', attrs.get('data-cue') == 'breath')
         elif tag == 'span' and self.cell is not None and attrs.get('class') == 'tokens':
             self.in_tokens = True
+            text, cue = self.cells[self.cell]
+            if text:
+                self.cells[self.cell] = (text + ' ', cue)
+        elif tag == 'span' and attrs.get('data-liaison') == 'visible' and self.cell is not None:
+            self.liaisons.append(('grid', self.cell))
+        elif tag == 'li' and attrs.get('class') == 'liaison-state':
+            self.mark_states.append((int(attrs['data-mark']), attrs['data-state']))
 
     def handle_endtag(self, tag):
         if tag == 'form':

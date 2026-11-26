@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from score.rehearse.beat_grid import BeatCell, BeatColumn, PracticeGrid
 from score.rehearse.breath_cues import BreathCue
-from score.rehearse.preview import PracticePreview
+from score.rehearse.preview import LiaisonCue, PracticePreview
 from score.source.voices import Voice
 
 
@@ -13,6 +13,7 @@ class EditionSnapshot:
     title: str
     grid: PracticeGrid
     cues: tuple[BreathCue, ...]
+    liaisons: tuple[LiaisonCue, ...] = ()
 
 
 def create_snapshot_table(db: sqlite3.Connection) -> None:
@@ -25,7 +26,7 @@ def create_snapshot_table(db: sqlite3.Connection) -> None:
 
 
 def freeze_preview(preview: PracticePreview) -> EditionSnapshot:
-    return EditionSnapshot(preview.title, preview.grid, preview.cues)
+    return EditionSnapshot(preview.title, preview.grid, preview.cues, preview.liaison_cues)
 
 
 def write_snapshot(db: sqlite3.Connection, number: int, snapshot: EditionSnapshot) -> None:
@@ -36,6 +37,7 @@ def write_snapshot(db: sqlite3.Connection, number: int, snapshot: EditionSnapsho
         'voices': [[voice.id, voice.name] for voice in grid.voices],
         'rows': [[list(cell.words) for cell in row] for row in grid.rows],
         'cues': [[cue.voice, cue.column] for cue in snapshot.cues],
+        'liaisons': [[cue.mark_id, cue.voice, cue.column] for cue in snapshot.liaisons],
     }
     db.execute(
         'INSERT INTO edition_snapshots (edition, body) VALUES (?, ?)',
@@ -53,4 +55,7 @@ def read_snapshot(db: sqlite3.Connection, number: int) -> EditionSnapshot | None
         tuple(Voice(*voice) for voice in payload['voices']),
         tuple(tuple(BeatCell(tuple(words)) for words in line) for line in payload['rows']),
     )
-    return EditionSnapshot(payload['title'], grid, tuple(BreathCue(*cue) for cue in payload['cues']))
+    liaisons = tuple(LiaisonCue(*cue) for cue in payload.get('liaisons', ()))
+    return EditionSnapshot(
+        payload['title'], grid, tuple(BreathCue(*cue) for cue in payload['cues']), liaisons
+    )

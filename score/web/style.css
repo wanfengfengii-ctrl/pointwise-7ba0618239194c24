@@ -23,6 +23,12 @@ button { background: #146077; color: white; border: 0; border-radius: .28rem; pa
 .saved { color: #204c38; background: #e5f1e9; }
 .conflict { color: #682a23; background: #fcebe5; }
 .conflicting-word { color: #682a23; font-weight: 700; }
+.liaison-seam { list-style: none; margin: 0; display: inline; }
+.liaison-mark::after { content: "⌒"; color: #b05a13; font-weight: 700; padding: 0 .18em; speak: none; }
+td .tokens + .tokens { margin-left: .35rem; }
+.liaison-state[data-state=visible] strong { color: #204c38; }
+.liaison-state[data-state=hidden] strong { color: #8a6216; }
+.liaison-state[data-state=dead] strong { color: #682a23; }
 .grid-scroll { overflow-x: auto; }
 table { border-collapse: collapse; background: white; }
 th, td { border: 1px solid #bacbd1; padding: .55rem; min-width: 5.6rem; text-align: left; }

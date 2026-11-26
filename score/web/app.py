@@ -9,19 +9,30 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from score.edit.commit import EditNotFound, InvalidEdit, submit_edit
+from score.edit.commit import (
+    EditNotFound,
+    InvalidEdit,
+    OperationConflict,
+    submit_edit,
+    submit_resegment,
+)
 from score.edition.catalogue import list_editions
 from score.edition.publish import PublishError, initialize_edition_store, publish_edition
 from score.edition.readback import EditionNotFound, read_edition, render_edition
+from score.liandu.store import initialize_liaison_store
+from score.liandu.submit import LiaisonConflict, LiaisonNotFound, LiaisonSelection, submit_liaison
 from score.rehearse.preview import PreviewNotFound, build_preview, render_preview
 from score.rehearse.section import InvalidPracticeRange
+from score.edit.resegment import ResegmentInvalid
 from score.source.bars import read_bars
 from score.source.import_score import SourceImportError, import_score, initialize_source_store, list_sources
 from score.source.seed import initialize_sample
 from score.source.voices import read_voices
-from score.web.edit_form import decode_edit_form
+from score.web.edit_form import EditFormInput, LiaisonFormInput, decode_edit_form
 from score.web.edit_result import render_edit_result
+from score.web.liaison_result import render_liaison_conflict, render_liaison_result
 from score.web.navigation import edition_url, page, worksheet_url
+from score.web.resegment_result import render_resegment_conflict
 from score.web.worksheet import WorksheetNotFound, render_worksheet
 
 
@@ -127,7 +138,36 @@ class ScoreHandler(BaseHTTPRequestHandler):
     def _post(self, db: sqlite3.Connection, path: str) -> None:
         if path == '/edit':
             submission = decode_edit_form(self._body())
-            result = submit_edit(db, submission.selection, submission.draft)
+            if isinstance(submission, LiaisonFormInput):
+                selection = LiaisonSelection(
+                    submission.revision, submission.voice, submission.bar,
+                    submission.left, submission.right,
+                )
+                try:
+                    current, mark = submit_liaison(db, selection)
+                except LiaisonConflict as error:
+                    status, body = render_liaison_conflict(
+                        db, error.revision.number, submission.voice, submission.bar, error.reason
+                    )
+                    self._reply(status, body)
+                    return
+                status, body = render_liaison_result(
+                    db, current.number, submission.voice, submission.bar, mark
+                )
+                self._reply(status, body)
+                return
+            if submission.selection.kind == 'resegment':
+                try:
+                    result = submit_resegment(db, submission.selection, submission.draft)
+                except OperationConflict as error:
+                    status, body = render_resegment_conflict(
+                        db, error.revision.number, submission.selection.voice,
+                        submission.selection.bar, error.reason,
+                    )
+                    self._reply(status, body)
+                    return
+            else:
+                result = submit_edit(db, submission.selection, submission.draft)
             status, body = render_edit_result(db, result, submission.draft)
             self._reply(status, body)
         elif path == '/edition':
@@ -149,10 +189,14 @@ class ScoreHandler(BaseHTTPRequestHandler):
                     self._post(db, target.path)
                 else:
                     self._get(db, target.path, _fields(target.query))
-        except (WorksheetNotFound, EditNotFound, PreviewNotFound, EditionNotFound) as error:
+        except (WorksheetNotFound, EditNotFound, PreviewNotFound, EditionNotFound, LiaisonNotFound) as error:
             self._error(404, str(error))
-        except (InvalidEdit, InvalidPracticeRange, ValueError) as error:
+        except (InvalidEdit, InvalidPracticeRange, ResegmentInvalid, ValueError) as error:
             self._error(400, str(error))
+        except OperationConflict as error:
+            self._error(409, error.reason)
+        except LiaisonConflict as error:
+            self._error(409, str(error))
         except PublishError as error:
             self.log_error('publish failed: %s', error.__cause__)
             self._error(503, str(error))
@@ -196,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         with closing(connect_score(args.db)) as db:
             initialize_source_store(db)
             initialize_edition_store(db)
+            initialize_liaison_store(db)
             if args.command == 'import':
                 revision = import_score(db, json.loads(args.file.read_text(encoding='utf-8')))
             else:

@@ -30,10 +30,11 @@ def read_edition(db: sqlite3.Connection, number: int) -> PublishedEdition:
 
 def render_edition(edition: PublishedEdition) -> str:
     entry, snapshot = edition.catalogue, edition.snapshot
+    grid = render_grid(snapshot.grid, snapshot.cues, snapshot.liaisons)
     return page('排练定稿', f'''
 <section id="edition" data-number="{entry.number}" data-revision="{entry.revision}">
 <h1>{escape(snapshot.title)} · 定稿 {entry.number}</h1>
 <p>源自工作版 {entry.revision} · 小节 {escape(entry.first)} 至 {escape(entry.last)}</p>
-{render_grid(snapshot.grid, snapshot.cues)}
+{grid}
 <p><a id="edition-link" href="{escape(edition_url(entry.number))}">领取此定稿的固定地址</a></p>
 </section>''')

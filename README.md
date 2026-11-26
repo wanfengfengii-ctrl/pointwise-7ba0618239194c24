@@ -20,9 +20,17 @@
 
 - `GET /worksheet?revision=1&voice=sop&bar=1` 打开指定工作版。也可用 `score=wangxi` 代替 `revision` 以打开当前版。
 - `POST /edit` 使用编辑页发出的 URL 编码表单。保存返回 200 和实稿页面，冲突返回 409 和可继续编辑的现谱页面。
-- `GET /preview?revision=1&first=1&last=2` 按指定工作版和范围审阅。
-- `POST /edition` 接收预览页给出的 `revision`、`first`、`last`，成功返回 201 和定稿地址。
+  - `kind=replace`：普通替换，字段 `first`、`last`、`draft`，空草稿表示删除。
+  - `kind=insert`：缝中插词，字段 `gap`、`draft`。
+  - `kind=resegment`：重分词，字段 `first`、`last` 为当前工作版上一段连续同拍词，`draft` 按空白分词；拼接后逐 Unicode 码点必须与原段相同，字符身份和拍位照留，只受理当前工作版。
+  - `kind=liaison`：标注连读，字段 `gap=[原版号, 左原词号, 右原词号]`；两原字以原顺序仍相邻即可办理，已在同一词内也可，办理后附着于实际保存版。
+- `GET /preview?revision=1&first=1&last=2` 按指定工作版和范围审阅，列出各连读标记在该版的可见、暂隐或失效状态，并在实际词缝标出可见项。
+- `POST /edition` 接收预览页给出的 `revision`、`first`、`last`，成功返回 201 和定稿地址；只把所审范围内可见的连读提示连同拍格、换气写入成品。
 - `GET /edition?number=1` 领取定稿。
+
+### 连读标记的生命周期
+
+标记记录的是两个原字符身份之间的缝，而非词文。两原字仍在正式词序相邻且处在实际词界时可见；并入同一词或被插词隔开时暂隐，词界恢复后复显；任一原字被普通改词删换后在后续版本永久失效。普通改词写入的新字即使同字同拍也取得新身份，不能承接原标记。
 
 ## 正常回归
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from score.edit.gaps import enumerate_gaps
 from score.edit.measure_edit import apply_insertion, apply_replacement
 from score.edit.occurrences import Occurrence
+from score.edit.resegment import apply_resegment, validate_draft, validate_segment
 from score.edit.revisions import Revision, read_current_revision, read_revision, reserve_revision_number, save_revision
 
 
@@ -13,6 +14,15 @@ class InvalidEdit(ValueError):
 
 class EditNotFound(LookupError):
     pass
+
+
+class OperationConflict(LookupError):
+    """A new-style operation (resegment) cannot apply to the stale selection."""
+
+    def __init__(self, revision: Revision, reason: str):
+        super().__init__(reason)
+        self.revision = revision
+        self.reason = reason
 
 
 @dataclass(frozen=True)
@@ -122,6 +132,35 @@ def submit_edit(db: sqlite3.Connection, selection: EditSelection, draft: str) ->
             edited = apply_insertion(current_words, index, lyrics, number)
         else:
             edited = apply_replacement(current_words, index, index + stop - start, lyrics, number)
+        lines = dict(current.lines)
+        lines[location] = edited
+        revision = Revision(number, current.score, lines)
+        save_revision(db, revision)
+        return SavedEdit(revision, selection, edited)
+
+
+def submit_resegment(db: sqlite3.Connection, selection: EditSelection, draft: str) -> SavedEdit:
+    if selection.kind != 'resegment':
+        raise InvalidEdit('未知编辑方式')
+    with db:
+        db.execute('BEGIN IMMEDIATE')
+        origin = read_revision(db, selection.revision)
+        location = (selection.voice, selection.bar)
+        if origin is None or location not in origin.lines:
+            raise EditNotFound('找不到原工作版中的声部小节')
+        current = read_current_revision(db, origin.score)
+        if current is None:
+            raise EditNotFound('找不到当前正式工作版')
+        old_words = origin.line(*location)
+        start, stop = _origin_bounds(selection, old_words)
+        # Form validity is judged against the submitted page before staleness.
+        validate_segment(old_words, start, stop)
+        new_words = validate_draft(draft, old_words, start, stop)
+        if origin.number != current.number:
+            raise OperationConflict(current, '重分词只受理当前工作版，请在现稿重新选择')
+        number = reserve_revision_number(db)
+        current_words = current.line(*location)
+        edited = apply_resegment(current_words, start, stop, new_words, number)
         lines = dict(current.lines)
         lines[location] = edited
         revision = Revision(number, current.score, lines)

@@ -41,7 +41,7 @@ def reserve_revision_number(db: sqlite3.Connection) -> int:
 
 def save_revision(db: sqlite3.Connection, revision: Revision) -> None:
     body = [
-        [voice, bar, [[word.key, word.text, word.beat] for word in words]]
+        [voice, bar, [[word.key, word.text, word.beat, list(word.chars)] for word in words]]
         for (voice, bar), words in revision.lines.items()
     ]
     db.execute(
@@ -73,10 +73,19 @@ def _decode_revision(row: tuple | None) -> Revision | None:
         return None
     number, score, body = row
     lines = {
-        (voice, bar): tuple(Occurrence(*word) for word in words)
+        (voice, bar): tuple(_decode_word(word) for word in words)
         for voice, bar, words in json.loads(body)
     }
     return Revision(number, score, lines)
+
+
+def _decode_word(word: list) -> Occurrence:
+    if len(word) == 4:
+        key, text, beat, chars = word
+        return Occurrence(key, text, beat, tuple(chars))
+    # Bodies written before char identities were tracked get default char keys.
+    key, text, beat = word
+    return Occurrence(key, text, beat)
 
 
 def read_revision(db: sqlite3.Connection, number: int) -> Revision | None:
