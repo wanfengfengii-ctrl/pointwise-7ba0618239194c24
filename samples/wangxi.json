@@ -1,0 +1,26 @@
+{
+  "score": "wangxi",
+  "title": "望溪晨歌",
+  "bars": [
+    {"id": "1", "beats": 4},
+    {"id": "2", "beats": 3},
+    {"id": "10", "beats": 2}
+  ],
+  "voices": [
+    {
+      "id": "sop",
+      "name": "高声部",
+      "lyrics": [
+        {"bar": "1", "text": "A", "beat": 0},
+        {"bar": "1", "text": "B", "beat": 0},
+        {"bar": "1", "text": "C", "beat": 2},
+        {"bar": "2", "text": "E", "beat": 0}
+      ]
+    },
+    {
+      "id": "alto",
+      "name": "低声部",
+      "lyrics": [{"bar": "1", "text": "D", "beat": 1}]
+    }
+  ]
+}
